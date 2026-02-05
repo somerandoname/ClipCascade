@@ -510,7 +510,7 @@ export default function App() {
           return [
             false,
             'Login Successful but unable to get server mode \n Status: ' +
-              serverModeResponse.status,
+            serverModeResponse.status,
             data_s,
           ];
         }
@@ -531,7 +531,7 @@ export default function App() {
             return [
               false,
               'Login Successful but unable to get stun url \n Status: ' +
-                stunUrlResponse.status,
+              stunUrlResponse.status,
               data_s,
             ];
           }
@@ -557,7 +557,7 @@ export default function App() {
             return [
               false,
               'Login Successful but unable to get max size \n Status: ' +
-                maxSizeResponse.status,
+              maxSizeResponse.status,
               data_s,
             ];
           }
@@ -1040,7 +1040,7 @@ export default function App() {
               <View style={styles.row}>
                 <Text style={styles.label}>
                   Run on system startup (disable if the READ_LOGS permission is
-                  granted):
+                  granted and Shizuku is not used):
                 </Text>
                 <CheckBox
                   value={data.relaunch_on_boot === 'true' ? true : false}

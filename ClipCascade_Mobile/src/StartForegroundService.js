@@ -307,7 +307,8 @@ module.exports = async (inputData = null) => {
         const { ClipboardListener } = NativeModules;
         const clipboardListener = new NativeEventEmitter(ClipboardListener);
         // start clipboard listening
-        ClipboardListener.startListening();
+        const allowFallback = inputData?.event !== 'BOOT_COMPLETED';
+        ClipboardListener.startListening(allowFallback);
         // clipboard listener callback
         const clipboardOnChange = clipboardListener.addListener(
           'onClipboardChange',

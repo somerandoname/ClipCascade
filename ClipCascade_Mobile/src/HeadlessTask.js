@@ -20,7 +20,7 @@ module.exports = async data => {
       if (relaunch_on_boot !== null && relaunch_on_boot === 'true') {
         if ((await enableForegroundService()) === 'true') {
           await setDataInAsyncStorage('wsStatusMessage', '');
-          const result = await StartForegroundService();
+          const result = await StartForegroundService(data);
           if (result[0] === false) {
             throw result[1];
           }
