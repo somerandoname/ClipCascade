@@ -5,7 +5,9 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import androidx.work.WorkManager
 import android.webkit.CookieManager
 import android.net.Uri
@@ -163,7 +165,10 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
             val clipboard = reactApplicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(clipData)
 
-            promise.resolve("Image copied to clipboard.")
+            // Return the actual Base64 data of what was saved/put on clipboard
+            // This is crucial for hash comparison on the JS side to prevent loops.
+            val finalBase64 = Base64.encodeToString(imageBytes, Base64.DEFAULT)
+            promise.resolve(finalBase64)
 
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to copy image to clipboard: ${e.message}")
@@ -259,6 +264,24 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
         return candidate
     }
 
+
+    @ReactMethod
+    fun emitEvent(eventName: String, params: ReadableArray?) {
+        val reactContext = reactApplicationContext
+        val eventData = Arguments.createMap()
+        
+        // Map the array to a payload object
+        params?.let {
+            for (i in 0 until it.size()) {
+                // Assumes a simple "key:value" string array for this implementation
+                val item = it.getString(i) ?: ""
+                eventData.putString("param_$i", item)
+            }
+        }
+
+        val emitter = reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+        emitter?.emit(eventName, eventData)
+    }
 
     /**
      * JS calls this synchronously, passing a JS array of keys:

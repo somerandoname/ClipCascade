@@ -1,3 +1,4 @@
+import { DeviceEventEmitter } from 'react-native';
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
@@ -26,6 +27,8 @@ module.exports = async data => {
           }
         }
       }
+    } else if (data && data['event'] === 'PING') {
+      DeviceEventEmitter.emit('CLIPCASCADE_PING');
     }
   } catch (e) {
     console.error('Error in Headless JS Task:', e);
