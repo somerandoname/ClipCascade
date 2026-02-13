@@ -170,6 +170,12 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
     }
 
     @ReactMethod
+    fun suppressLogcatMonitoring() {
+        // Reset the debounce timer to now, effectively suppressing for 1 second (activityDebounceTime)
+        lastActivityStartTime = System.currentTimeMillis()
+    }
+
+    @ReactMethod
     fun stopListening() {
         // 1) Remove clipboard listener
         listener?.let {

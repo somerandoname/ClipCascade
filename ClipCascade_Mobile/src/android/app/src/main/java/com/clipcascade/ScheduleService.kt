@@ -72,6 +72,14 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
     suspend fun foregroundServiceIsActive(bridgeData: AsyncStorageBridge) : Boolean {
         // check if foreground service is running
         bridgeData.setValue("echo", "ping")
+        
+        // Trigger Headless JS task to wake up the engine
+        val intent = Intent(applicationContext, HeadlessTaskService::class.java)
+        val bundle = android.os.Bundle()
+        bundle.putString("event", "PING")
+        intent.putExtras(bundle)
+        applicationContext.startService(intent)
+
         repeat(35) { // 3500 ms
             delay(100) // Wait for 100 ms
             if (bridgeData.getValue("echo") == "pong") {

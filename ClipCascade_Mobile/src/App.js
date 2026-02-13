@@ -13,6 +13,7 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 
 import { useEffect, useState, useRef } from 'react';
@@ -201,15 +202,26 @@ export default function App() {
 
   const [initError, setInItError] = useState([false, '']);
   useEffect(() => {
+
+    // setup event listeners (for instant updates)
+    const wsStatusListener = DeviceEventEmitter.addListener('CLIPCASCADE_WS_STATUS_REPLY', (event) => {
+      setWsPageMessage(event.message);
+    });
+    const p2pStatusListener = DeviceEventEmitter.addListener('CLIPCASCADE_P2P_STATUS_REPLY', (event) => {
+      setWsPageP2PMessage(event.message);
+    });
+    const filesListener = DeviceEventEmitter.addListener('CLIPCASCADE_FILES_AVAILABLE_REPLY', (event) => {
+      setEnableFilesDownloadButton(event.available);
+    });
+
     // initialize
     const init = async () => {
       try {
         // enable websocket button
         await setDataInAsyncStorage('enableWSButton', 'true');
 
-        // start polling UI flags
         isMountedRef.current = true;
-        pollUIFlags();
+
 
         // get data from async storage and initialize data hook
         let data_s = await getAsyncStorage();
@@ -231,6 +243,8 @@ export default function App() {
 
           setLoadingPageMessage('Checking foreground service...');
           await setDataInAsyncStorage('echo', 'ping');
+          // Trigger event to wake up service if needed
+          DeviceEventEmitter.emit('CLIPCASCADE_PING');
           let iterate = 35; //3500 ms
           while (iterate > 0) {
             await new Promise(resolve => setTimeout(resolve, 100)); //100 ms
@@ -251,6 +265,20 @@ export default function App() {
           }
         }
         setWsIsRunning(wsIsRunning_s);
+
+        // Load initial status messages if service is running
+        if (wsIsRunning_s === 'true') {
+          const currentStatus = await getDataFromAsyncStorage('wsStatusMessage');
+          setWsPageMessage(currentStatus || '');
+          const currentP2PStatus = await getDataFromAsyncStorage('p2pStatusMessage');
+          setWsPageP2PMessage(currentP2PStatus || '');
+          const filesAvailable = await getDataFromAsyncStorage('filesAvailableToDownload');
+          setEnableFilesDownloadButton(filesAvailable === 'true');
+        } else {
+          setWsPageMessage('');
+          setWsPageP2PMessage('');
+          setEnableFilesDownloadButton(false);
+        }
 
         if (wsIsRunning_s === 'true') {
           //enable websocket page
@@ -345,6 +373,9 @@ export default function App() {
         }
       };
       clearWSStatusMessage();
+      if (wsStatusListener) wsStatusListener.remove();
+      if (p2pStatusListener) p2pStatusListener.remove();
+      if (filesListener) filesListener.remove();
     };
   }, []);
 
@@ -656,47 +687,6 @@ export default function App() {
     }
   };
 
-  function sleep(ms) {
-    return new Promise(res => setTimeout(res, ms));
-  }
-
-  async function pollUIFlags() {
-    const POLL_KEYS = [
-      'wsIsRunning',
-      'wsStatusMessage',
-      'server_mode',
-      'p2pStatusMessage',
-      'filesAvailableToDownload',
-    ];
-
-    while (isMountedRef.current) {
-      const json = NativeBridgeModule.getFlagsSync(POLL_KEYS);
-      const latest = JSON.parse(json);
-
-      if (latest.wsIsRunning === 'true') {
-        // Websocket status message
-        const msg1 = latest.wsStatusMessage;
-        if (msg1 !== null && msg1 !== '') {
-          setWsPageMessage(msg1);
-        }
-
-        if (latest.server_mode === 'P2P') {
-          const msg2 = latest.p2pStatusMessage;
-          if (msg2 !== null) {
-            setWsPageP2PMessage(msg2);
-          }
-        }
-
-        // Files available to download
-        if (latest.filesAvailableToDownload === 'true') {
-          setEnableFilesDownloadButton(true);
-        } else {
-          setEnableFilesDownloadButton(false);
-        }
-      }
-      await sleep(300);
-    }
-  }
 
   // Foreground service handler
   const foregroundService = async () => {
@@ -716,6 +706,9 @@ export default function App() {
           setWsPageMessage('🚀 Starting foreground service...');
           await onDisplayNotification();
         } else {
+          // Send event to stop service
+          DeviceEventEmitter.emit('CLIPCASCADE_STOP_SERVICE');
+
           // wait for 1 sec so that foreground service can be terminated
           setWsPageMessage('⌛ Stopping foreground service...');
           while (
@@ -867,7 +860,7 @@ export default function App() {
       ) {
         const res = await pickDirectory();
         await setDataInAsyncStorage('dirPath', res.uri);
-        await setDataInAsyncStorage('downloadFiles', 'true');
+        DeviceEventEmitter.emit('CLIPCASCADE_START_DOWNLOAD');
       } else {
         setEnableFilesDownloadButton(false);
       }
