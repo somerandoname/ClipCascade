@@ -22,10 +22,13 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         private const val TAG = "ScheduleService"
         private const val NOTIFICATION_CHANNEL_ID = "clipcascade_foreground_service_stopped_running"
         private const val NOTIFICATION_ID = 1
+        private const val SUMMARY_ID = 100
+        private const val GROUP_KEY = "monitoring_group"
 
         fun removeNotificationIfPresent(context: Context) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(NOTIFICATION_ID)
+            notificationManager.cancel(SUMMARY_ID)
         }
 
         fun hasNotificationPermission(context: Context): Boolean {
@@ -87,7 +90,7 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
-                "ClipCascade Alerts",
+                "Alerts",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
             notificationManager.createNotificationChannel(channel)
@@ -105,15 +108,27 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
                 applicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            // 1. Create the Group Summary (Placeholder)
+            val summaryNotification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification_failure) // Should be same as child
+                .setGroup(GROUP_KEY)
+                .setGroupSummary(true)
+                .setAutoCancel(true)
+                .build()
+
+            // 2. Create the actual Alert Notification
             val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_failure)
                 .setContentTitle("ClipCascade Service Inactive")
                 .setContentText("ClipCascade monitoring is inactive. Tap to restart.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
+                .setGroup(GROUP_KEY)
+                .setGroupSummary(false)
                 .setAutoCancel(true)
                 .build()
 
+            notificationManager.notify(SUMMARY_ID, summaryNotification)
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }

@@ -39,6 +39,8 @@ module.exports = async (inputData = null) => {
   const RECONNECT_WS_TIMER = 10000; // 10 seconds
   const HEARTBEAT_INTERVAL = 20000; // 20 seconds
   const FRAGMENT_SIZE = 15360; // 15 KiB
+  const MONITOR_GROUP_ID = 'monitoring_group';
+  const DOWNLOAD_GROUP_ID = 'download_group';
 
   // forground service
   notifee.registerForegroundService(notification => {
@@ -340,10 +342,23 @@ module.exports = async (inputData = null) => {
         const showFilesDownloadNotification = async msg => {
           // Display a silent notification
           await notifee.displayNotification({
+            id: 'ClipCascade_Download_Files_Notification_Summary_Id',
+            title: '',
+            android: {
+              channelId: 'ClipCascade_Files',
+              groupId: DOWNLOAD_GROUP_ID,
+              groupSummary: true,
+              smallIcon: 'ic_small_icon',
+            },
+          });
+
+          await notifee.displayNotification({
             id: 'ClipCascade_Download_Files_Notification_Id',
             title: msg,
             android: {
-              channelId: 'ClipCascade',
+              channelId: 'ClipCascade_Files',
+              groupId: DOWNLOAD_GROUP_ID,
+              groupSummary: false,
               smallIcon: 'ic_small_icon',
               color: 'gray',
               pressAction: {
@@ -359,10 +374,23 @@ module.exports = async (inputData = null) => {
           timeout = 10000,
         ) => {
           await notifee.displayNotification({
+            id: 'ClipCascade_WebSocket_Status_Notification_Summary_Id',
+            title: '',
+            android: {
+              channelId: 'ClipCascade_Connection_Status',
+              groupId: MONITOR_GROUP_ID,
+              groupSummary: true,
+              smallIcon: 'ic_small_icon',
+            },
+          });
+
+          await notifee.displayNotification({
             id: 'ClipCascade_WebSocket_Status_Notification_Id',
             title: msg,
             android: {
               channelId: 'ClipCascade_Connection_Status',
+              groupId: MONITOR_GROUP_ID,
+              groupSummary: false,
               smallIcon: 'ic_small_icon',
               pressAction: {
                 id: 'default',
@@ -609,6 +637,7 @@ module.exports = async (inputData = null) => {
 
             await setDataInAsyncStorage('wsStatusMessage', '✅ Disconnected');
             cleanupClipboardListeners();
+            await notifee.cancelNotification('ClipCascade_Monitor_Summary_Id');
             await notifee.stopForegroundService();
           };
         } else if (server_mode === 'P2P') {
@@ -904,6 +933,7 @@ module.exports = async (inputData = null) => {
             await setDataInAsyncStorage('wsStatusMessage', '✅ Disconnected');
             await setDataInAsyncStorage('p2pStatusMessage', '');
             cleanupClipboardListeners();
+            await notifee.cancelNotification('ClipCascade_Monitor_Summary_Id');
             await notifee.stopForegroundService();
           };
 
@@ -1329,12 +1359,26 @@ module.exports = async (inputData = null) => {
                 await setDataInAsyncStorage('downloadFiles', 'false');
                 const dirPath = await getDataFromAsyncStorage('dirPath');
 
+                // display progress notification summary
+                await notifee.displayNotification({
+                  id: 'ClipCascade_Download_Files_Progress_Notification_Summary_Id',
+                  title: '',
+                  android: {
+                    channelId: 'ClipCascade_Progress',
+                    groupId: DOWNLOAD_GROUP_ID,
+                    groupSummary: true,
+                    smallIcon: 'ic_small_icon',
+                  },
+                });
+
                 // display progress notification
                 await notifee.displayNotification({
                   id: 'ClipCascade_Download_Files_Progress_Notification_Id',
                   title: 'Downloading File(s)...',
                   android: {
                     channelId: 'ClipCascade_Progress',
+                    groupId: DOWNLOAD_GROUP_ID,
+                    groupSummary: false,
                     smallIcon: 'ic_small_icon',
                     progress: {
                       indeterminate: true,
@@ -1372,12 +1416,31 @@ module.exports = async (inputData = null) => {
   });
 
   try {
+    // Create notification channel groups
+    await notifee.createChannelGroups([
+      { id: 'monitoring', name: 'Service status' },
+      { id: 'transfers', name: 'File transfers' },
+    ]);
+
     // Create a notification channel for the foreground service
     const channelId = await notifee.createChannel({
       id: 'ClipCascade',
-      name: 'ClipCascade Monitor',
+      name: 'Foreground service',
+      groupId: 'monitoring',
       importance: AndroidImportance.LOW,
       sound: '',
+    });
+
+    // Display a summary notification for the monitor group
+    await notifee.displayNotification({
+      id: 'ClipCascade_Monitor_Summary_Id',
+      title: '',
+      android: {
+        channelId,
+        groupId: MONITOR_GROUP_ID,
+        groupSummary: true,
+        smallIcon: 'ic_small_icon',
+      },
     });
 
     // Display a notification to start the foreground service
@@ -1385,6 +1448,8 @@ module.exports = async (inputData = null) => {
       title: 'ClipCascade',
       android: {
         channelId,
+        groupId: MONITOR_GROUP_ID,
+        groupSummary: false,
         asForegroundService: true,
         smallIcon: 'ic_small_icon',
         color: 'gray',
@@ -1395,17 +1460,27 @@ module.exports = async (inputData = null) => {
       },
     });
 
+    // Create a notification channel for available downloads
+    await notifee.createChannel({
+      id: 'ClipCascade_Files',
+      name: 'Download available',
+      groupId: 'transfers',
+      importance: AndroidImportance.LOW,
+    });
+
     // Create a notification channel for download progress
     await notifee.createChannel({
       id: 'ClipCascade_Progress',
-      name: 'ClipCascade Download Progress',
+      name: 'Download progress',
+      groupId: 'transfers',
       importance: AndroidImportance.DEFAULT,
     });
 
     // Create a notification channel for connection status
     await notifee.createChannel({
       id: 'ClipCascade_Connection_Status',
-      name: 'ClipCascade Connection Status',
+      name: 'Connection status',
+      groupId: 'monitoring',
       importance: AndroidImportance.HIGH,
     });
 
