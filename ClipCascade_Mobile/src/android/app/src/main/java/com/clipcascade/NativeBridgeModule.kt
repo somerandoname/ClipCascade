@@ -206,6 +206,10 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
             val docFile = DocumentFile.fromTreeUri(reactApplicationContext, uri)
                 ?: throw IllegalArgumentException("Invalid directory URI: $uri")
 
+            if (!docFile.exists() || !docFile.canWrite()) {
+                throw IOException("Directory no longer exists or access was revoked: $uri")
+            }
+
             for ((fileName, base64Data) in fileMap) {
                 // Decode the Base64 string to raw bytes
                 val decodedBytes = Base64.decode(base64Data, Base64.DEFAULT)
@@ -232,6 +236,83 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
             promise.resolve("Files saved successfully.")
         } catch (e: Exception) {
             promise.reject("ERROR", "Failed to save files: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun isDirAccessible(contentUri: String, promise: Promise) {
+        try {
+            val trimmedUri = contentUri.trim()
+            val uri = Uri.parse(trimmedUri)
+            val docFile = DocumentFile.fromTreeUri(reactApplicationContext, uri)
+            // check if docFile is null, doesn't exist, or cannot be written to
+            if (docFile == null || !docFile.exists() || !docFile.canWrite()) {
+                promise.resolve(false)
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun getFriendlyPath(contentUri: String, promise: Promise) {
+        try {
+            val uri = Uri.parse(contentUri)
+            val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+
+            // 1. Handle the "Downloads" provider which often lacks a volume prefix or uses "raw:"
+            if (uri.authority == "com.android.providers.downloads.documents") {
+                val folderName = if (docId.startsWith("raw:")) {
+                    docId.substringAfterLast('/')
+                } else {
+                    "Downloads"
+                }
+                promise.resolve(folderName)
+                return
+            }
+
+            val split = docId.split(":")
+            val volumeId = split[0]
+            val relativePath = if (split.size > 1) split[1] else ""
+
+            val storageManager = reactApplicationContext.getSystemService(Context.STORAGE_SERVICE) as android.os.storage.StorageManager
+            var volumeLabel = "Storage"
+
+            // 2. Resolve volume label natively using StorageManager
+            if (volumeId == "primary") {
+                volumeLabel = "Internal storage"
+            } else {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    for (volume in storageManager.storageVolumes) {
+                        if (volume.uuid == volumeId) {
+                            volumeLabel = volume.getDescription(reactApplicationContext)
+                            break
+                        }
+                    }
+                } else {
+                   volumeLabel = volumeId
+                }
+            }
+
+            // 3. Build the full friendly path
+            val friendlyPath = if (relativePath.isEmpty()) {
+                volumeLabel
+            } else {
+                // val cleanPath = relativePath.trim('/').replace("/", " / ")
+                "$volumeLabel/$relativePath"
+            }
+
+            promise.resolve(friendlyPath)
+        } catch (e: Exception) {
+            // Fallback: If system resolution fails, at least show the folder name using DocumentFile
+            try {
+                val doc = DocumentFile.fromTreeUri(reactApplicationContext, Uri.parse(contentUri))
+                promise.resolve(doc?.name ?: contentUri)
+            } catch (fallbackEx: Exception) {
+                promise.resolve(contentUri)
+            }
         }
     }
 

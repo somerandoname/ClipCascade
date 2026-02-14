@@ -333,7 +333,6 @@ module.exports = async (inputData = null) => {
             );
             await setDataInAsyncStorage('filesAvailableToDownload', 'false');
             await setDataInAsyncStorage('downloadFiles', 'false');
-            await setDataInAsyncStorage('dirPath', '');
           }
         };
 

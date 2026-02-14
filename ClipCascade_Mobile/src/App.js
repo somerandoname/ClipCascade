@@ -13,6 +13,7 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  ToastAndroid,
 } from 'react-native';
 
 import { useEffect, useState, useRef } from 'react';
@@ -189,7 +190,6 @@ export default function App() {
     try {
       await setDataInAsyncStorage('filesAvailableToDownload', 'false');
       await setDataInAsyncStorage('downloadFiles', 'false');
-      await setDataInAsyncStorage('dirPath', '');
       await notifee.cancelNotification(
         'ClipCascade_Download_Files_Notification_Id',
       );
@@ -667,6 +667,7 @@ export default function App() {
       'server_mode',
       'p2pStatusMessage',
       'filesAvailableToDownload',
+      'dirPath',
     ];
 
     while (isMountedRef.current) {
@@ -692,6 +693,16 @@ export default function App() {
           setEnableFilesDownloadButton(true);
         } else {
           setEnableFilesDownloadButton(false);
+        }
+
+        // Selected download path
+        const path = latest.dirPath;
+        if (path !== null && path !== '') {
+          NativeBridgeModule.getFriendlyPath(path).then(friendly => {
+            setSelectedDownloadPath(friendly);
+          });
+        } else {
+          setSelectedDownloadPath('');
         }
       }
       await sleep(300);
@@ -859,22 +870,72 @@ export default function App() {
   const [enableFilesDownloadButton, setEnableFilesDownloadButton] =
     useState(false);
 
+  // selected download path
+  const [selectedDownloadPath, setSelectedDownloadPath] = useState('');
+
   // download files
   const downloadFiles = async () => {
     try {
       if (
         (await getDataFromAsyncStorage('filesAvailableToDownload')) === 'true'
       ) {
-        const res = await pickDirectory();
-        await setDataInAsyncStorage('dirPath', res.uri);
-        await setDataInAsyncStorage('downloadFiles', 'true');
+        let dirPath = await getDataFromAsyncStorage('dirPath');
+        if (dirPath && !(await NativeBridgeModule.isDirAccessible(dirPath))) {
+          dirPath = '';
+        }
+
+        if (!dirPath) {
+          dirPath = await changeDownloadFolder(true);
+        }
+
+        if (dirPath) {
+          await setDataInAsyncStorage('downloadFiles', 'true');
+        }
       } else {
         setEnableFilesDownloadButton(false);
       }
     } catch (e) {
       if (!isCancel(e)) {
-        Alert.alert('Error', 'Unknown error: ' + JSON.stringify(e));
+        await setDataInAsyncStorage('dirPath', '');
+        setSelectedDownloadPath('');
+        try {
+          const newPath = await changeDownloadFolder(true);
+          if (newPath) {
+            await setDataInAsyncStorage('downloadFiles', 'true');
+          }
+        } catch (innerE) {
+          if (!isCancel(innerE)) {
+            Alert.alert(
+              'Error',
+              'Failed to access download folder. Please pick it again. \n\n' +
+              innerE.message,
+            );
+          }
+        }
       }
+    }
+  };
+
+  const changeDownloadFolder = async (silent = false) => {
+    const isSilent = silent === true; // Strictly check for true to ignore event objects when called from UI
+    try {
+      const res = await pickDirectory({ requestLongTermAccess: true });
+      await setDataInAsyncStorage('dirPath', res.uri);
+      const friendly = await NativeBridgeModule.getFriendlyPath(res.uri);
+      setSelectedDownloadPath(friendly);
+      if (!isSilent) {
+        ToastAndroid.show('Download folder changed successfully.', ToastAndroid.SHORT);
+      }
+      return res.uri;
+    } catch (e) {
+      if (!isCancel(e)) {
+        if (!isSilent) {
+          Alert.alert('Error', 'Failed to change download folder: ' + e.message);
+        } else {
+          throw e; // Re-throw to be handled by the caller in silent mode
+        }
+      }
+      return null;
     }
   };
 
@@ -1160,14 +1221,25 @@ export default function App() {
             {/* File download button */}
             {enableFilesDownloadButton &&
               enableFilesDownloadButton === true && (
-                <TouchableOpacity
-                  style={[styles.loginButton, { backgroundColor: '#4bab4e' }]}
-                  onPress={downloadFiles}
-                >
-                  <Text style={styles.loginButtonText}>
-                    📥 Download File(s)
-                  </Text>
-                </TouchableOpacity>
+                <View>
+                  <TouchableOpacity
+                    style={[styles.loginButton, { backgroundColor: '#4bab4e' }]}
+                    onPress={downloadFiles}
+                  >
+                    <Text style={styles.loginButtonText}>
+                      📥 Download file(s)
+                    </Text>
+                  </TouchableOpacity>
+                  {selectedDownloadPath !== '' && (
+                    <TouchableOpacity onPress={changeDownloadFolder}>
+                      <Text style={[styles.linkText, { fontSize: 16 }]}>
+                        Change download folder:
+                        {'\n'}
+                        {selectedDownloadPath}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
             {/* new version display message */}
             {newVersionAvailable[0] && (
