@@ -332,6 +332,7 @@ module.exports = async (inputData = null) => {
               'ClipCascade_Download_Files_Notification_Id',
             );
             await setDataInAsyncStorage('filesAvailableToDownload', 'false');
+            await setDataInAsyncStorage('filesAvailableToDownloadCount', '0');
             await setDataInAsyncStorage('downloadFiles', 'false');
             await setDataInAsyncStorage('dirPath', '');
           }
@@ -437,6 +438,10 @@ module.exports = async (inputData = null) => {
                           await setDataInAsyncStorage(
                             'filesAvailableToDownload',
                             'true',
+                          );
+                          await setDataInAsyncStorage(
+                            'filesAvailableToDownloadCount',
+                            String(Object.keys(JSON.parse(cb)).length),
                           );
                         }
                       }
@@ -1025,6 +1030,10 @@ module.exports = async (inputData = null) => {
                     await setDataInAsyncStorage(
                       'filesAvailableToDownload',
                       'true',
+                    );
+                    await setDataInAsyncStorage(
+                      'filesAvailableToDownloadCount',
+                      String(Object.keys(JSON.parse(cb)).length),
                     );
                   }
                 }

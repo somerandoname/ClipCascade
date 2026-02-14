@@ -193,7 +193,9 @@ export default function App() {
       await notifee.cancelNotification(
         'ClipCascade_Download_Files_Notification_Id',
       );
+      await setDataInAsyncStorage('filesAvailableToDownloadCount', '0');
       setEnableFilesDownloadButton(false);
+      setFilesCount(0);
     } catch (e) {
       throw e;
     }
@@ -667,6 +669,7 @@ export default function App() {
       'server_mode',
       'p2pStatusMessage',
       'filesAvailableToDownload',
+      'filesAvailableToDownloadCount',
     ];
 
     while (isMountedRef.current) {
@@ -690,6 +693,10 @@ export default function App() {
         // Files available to download
         if (latest.filesAvailableToDownload === 'true') {
           setEnableFilesDownloadButton(true);
+          const count = Number(latest.filesAvailableToDownloadCount);
+          if (!isNaN(count)) {
+            setFilesCount(count);
+          }
         } else {
           setEnableFilesDownloadButton(false);
         }
@@ -858,6 +865,9 @@ export default function App() {
   // files download button
   const [enableFilesDownloadButton, setEnableFilesDownloadButton] =
     useState(false);
+
+  // files download count
+  const [filesCount, setFilesCount] = useState(0);
 
   // download files
   const downloadFiles = async () => {
@@ -1165,7 +1175,7 @@ export default function App() {
                   onPress={downloadFiles}
                 >
                   <Text style={styles.loginButtonText}>
-                    📥 Download File(s)
+                    📥 Download {filesCount} file{filesCount !== 1 ? 's' : ''}
                   </Text>
                 </TouchableOpacity>
               )}
