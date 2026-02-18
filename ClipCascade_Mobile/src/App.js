@@ -673,27 +673,35 @@ export default function App() {
       const json = NativeBridgeModule.getFlagsSync(POLL_KEYS);
       const latest = JSON.parse(json);
 
+      if (latest.wsIsRunning !== null) {
+        setWsIsRunning(latest.wsIsRunning);
+      }
+
+      // Websocket status message (always update if present)
+      const msg1 = latest.wsStatusMessage;
+      if (msg1 !== null && msg1 !== '') {
+        setWsPageMessage(msg1);
+      }
+
+      if (latest.server_mode === 'P2P') {
+        const msg2 = latest.p2pStatusMessage;
+        if (msg2 !== null) {
+          setWsPageP2PMessage(msg2);
+        }
+      }
+
+      // Files available to download (only when running)
       if (latest.wsIsRunning === 'true') {
-        // Websocket status message
-        const msg1 = latest.wsStatusMessage;
-        if (msg1 !== null && msg1 !== '') {
-          setWsPageMessage(msg1);
-        }
-
-        if (latest.server_mode === 'P2P') {
-          const msg2 = latest.p2pStatusMessage;
-          if (msg2 !== null) {
-            setWsPageP2PMessage(msg2);
-          }
-        }
-
-        // Files available to download
         if (latest.filesAvailableToDownload === 'true') {
           setEnableFilesDownloadButton(true);
         } else {
           setEnableFilesDownloadButton(false);
         }
+      } else {
+        setEnableFilesDownloadButton(false);
       }
+
+
       await sleep(300);
     }
   }

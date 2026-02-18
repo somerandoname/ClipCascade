@@ -16,6 +16,6 @@ class BootReceiver : BroadcastReceiver() {
         val headlessTaskIntent = Intent(context, HeadlessTaskService::class.java).apply {
             putExtra("event", "BOOT_COMPLETED")
         }
-        context.startService(headlessTaskIntent)
+        ServiceUtils.startServiceCompat(context, headlessTaskIntent)
     }
 }
