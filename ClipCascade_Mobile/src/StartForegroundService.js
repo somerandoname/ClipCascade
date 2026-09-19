@@ -24,6 +24,7 @@ import {
   getMultipleDataFromAsyncStorage,
   clearAsyncStorage,
 } from './AsyncStorageManagement';
+import { reauthenticateIfNeeded } from './AuthManagement';
 
 
 // Global listener references to prevent duplicates on service restart/reload
@@ -72,6 +73,7 @@ const cleanupGlobalResources = async (keepListener = false) => {
   // 2. Clean up Network Clients (P2S)
   if (stompClient) {
     try {
+      stompClient.beforeConnect = null;
       stompClient.onConnect = null;
       stompClient.onDisconnect = null;
       stompClient.onStompError = null;
@@ -585,6 +587,24 @@ module.exports = async (inputData = null) => {
               heartbeatOutgoing: 0,
               forceBinaryWSFrames: true, // https://stomp-js.github.io/api-docs/latest/classes/Client.html#forceBinaryWSFrames
               // appendMissingNULLonIncoming: true, // https://stomp-js.github.io/api-docs/latest/classes/Client.html#appendMissingNULLonIncoming
+              beforeConnect: async () => {
+                try {
+                  const authResult = await reauthenticateIfNeeded();
+                  if (authResult.reauthenticated) {
+                    await updateWsStatus('🔄 Re-authenticated after server restart');
+                    const latestWsUrl = await getDataFromAsyncStorage('websocket_url');
+                    if (latestWsUrl && stompClient && stompClient.brokerURL !== latestWsUrl) {
+                      stompClient.brokerURL = latestWsUrl;
+                    }
+                  } else if (!authResult.authenticated && authResult.reason) {
+                    if (authResult.reason.includes('save_password is false')) {
+                      await updateWsStatus('⚠️ Session expired (server restarted). Please open the app to log in.');
+                    }
+                  }
+                } catch (err) {
+                  console.log('Error during beforeConnect auth check:', err);
+                }
+              },
               onConnect: async () => {
                 await updateWsStatus('✅ Connected');
 
@@ -694,7 +714,7 @@ module.exports = async (inputData = null) => {
               },
               onWebSocketClose: async event => {
 
-                const reason = evt?.reason || 'closed by client';
+                const reason = event?.reason || (event?.code ? `code ${event.code}` : 'closed by client');
                 await updateWsStatus(
                   `⚠️ WebSocket Close: ${reason}`,
                 );
@@ -842,7 +862,23 @@ module.exports = async (inputData = null) => {
 
             const initializeWebSocketSignalingClient = async () => {
               if (wsSignalingClient == null) {
-                wsSignalingClient = new WebSocket(websocket_url);
+                try {
+                  const authResult = await reauthenticateIfNeeded();
+                  if (authResult.reauthenticated) {
+                    await updateWsStatus('🔄 Re-authenticated after server restart');
+                  } else if (!authResult.authenticated && authResult.reason) {
+                    if (authResult.reason.includes('save_password is false')) {
+                      await updateWsStatus('⚠️ Session expired (server restarted). Please open the app to log in.');
+                    }
+                  }
+                } catch (err) {
+                  console.log('Error during P2P auth check:', err);
+                }
+
+                const currentWsUrl =
+                  (await getDataFromAsyncStorage('websocket_url')) ||
+                  websocket_url;
+                wsSignalingClient = new WebSocket(currentWsUrl);
 
                 wsSignalingClient.onopen = async () => {
                   await updateWsStatus('✅ Connected');
