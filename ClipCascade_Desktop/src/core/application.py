@@ -198,18 +198,18 @@ class Application:
                     self.config.data["websocket_url"] = Config.convert_to_websocket_url(
                         self.config.data["server_url"], WEBSOCKET_ENDPOINT
                     )
+                if self.config.data["cipher_enabled"] and raw_password:
+                    self.config.data["hashed_password"] = (
+                        self.cipher_manager.hash_password(raw_password)
+                    )
                 ws_conn_successful, msg = self._get_ws_manager().connect()
                 if ws_conn_successful:
                     self._get_ws_manager().is_login_phase = False
-                    if self.config.data["cipher_enabled"]:
-                        self.config.data["hashed_password"] = (
-                            self.cipher_manager.hash_password(raw_password)
-                        )
                     if self.config.data.get("save_password") and raw_password:
                         CredentialManager.save_password(
                             self.config.data["username"], raw_password
                         )
-                    else:
+                    elif not self.config.data.get("save_password"):
                         CredentialManager.delete_password(
                             self.config.data.get("username", "")
                         )

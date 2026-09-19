@@ -56,7 +56,11 @@ class ClipboardManager:
                 self.sys_tray.disable_files_download()
 
     @staticmethod
-    def hash_clipboard(clipboard: str) -> int:
+    def hash_clipboard(clipboard: any) -> int:
+        if isinstance(clipboard, str):
+            clipboard = clipboard.encode("utf-8")
+        elif not isinstance(clipboard, (bytes, bytearray)):
+            clipboard = str(clipboard).encode("utf-8")
         return xxhash.xxh64(clipboard).intdigest()
 
     def is_clipboard_size_within_limit(
