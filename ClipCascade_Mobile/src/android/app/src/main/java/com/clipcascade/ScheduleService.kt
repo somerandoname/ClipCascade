@@ -43,16 +43,22 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         }
     }
 
+    data class ConnectionStatus(
+        val isServiceRunning: Boolean,
+        val isConnected: Boolean
+    )
+
     // init
     override suspend fun doWork(): Result {
 
-        // show notification if foreground service is not running
+        // show notification if foreground service is not running or websocket is disconnected
         try {
             if(hasNotificationPermission(applicationContext)) {
                 val bridgeData = AsyncStorageBridge(applicationContext)
                 if(enableForegroundService(bridgeData)) {
-                    if(!foregroundServiceIsActive(bridgeData)) {
-                        showNotificationIfNotPresent()
+                    val status = checkConnectionStatus(bridgeData)
+                    if(!status.isConnected) {
+                        showNotificationIfNotPresent(isDisconnected = status.isServiceRunning)
                     } else {
                         removeNotificationIfPresent(applicationContext)
                     }
@@ -72,8 +78,8 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         return bridgeData.getValue("wsIsRunning")?.toBoolean() ?: false 
     } 
     
-    suspend fun foregroundServiceIsActive(bridgeData: AsyncStorageBridge) : Boolean {
-        // check if foreground service is running
+    suspend fun checkConnectionStatus(bridgeData: AsyncStorageBridge) : ConnectionStatus {
+        // check if foreground service is running and websocket is connected
         bridgeData.setValue("echo", "ping")
         
         // Trigger Headless JS task to wake up the engine
@@ -85,14 +91,27 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
 
         repeat(35) { // 3500 ms
             delay(100) // Wait for 100 ms
-            if (bridgeData.getValue("echo") == "pong") {
-                return true
+            val echo = bridgeData.getValue("echo")
+            if (echo == "connected") {
+                return ConnectionStatus(isServiceRunning = true, isConnected = true)
+            } else if (echo == "disconnected") {
+                return ConnectionStatus(isServiceRunning = true, isConnected = false)
+            } else if (echo == "pong") {
+                // Fallback: engine is running; check stored connectivity flags
+                val wsConnected = bridgeData.getValue("wsConnected")?.toBoolean() ?: false
+                val statusMsg = bridgeData.getValue("wsStatusMessage") ?: ""
+                val isConnected = wsConnected || statusMsg.contains("Connected")
+                return ConnectionStatus(isServiceRunning = true, isConnected = isConnected)
             }
         }
-        return false
+        return ConnectionStatus(isServiceRunning = false, isConnected = false)
     }
 
-    private fun showNotificationIfNotPresent() {
+    suspend fun foregroundServiceIsActive(bridgeData: AsyncStorageBridge) : Boolean {
+        return checkConnectionStatus(bridgeData).isConnected
+    }
+
+    private fun showNotificationIfNotPresent(isDisconnected: Boolean = false) {
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -124,11 +143,14 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
                 .setAutoCancel(true)
                 .build()
 
+            val title = if (isDisconnected) "ClipCascade Disconnected" else "ClipCascade Service Inactive"
+            val text = if (isDisconnected) "ClipCascade connection is lost. Tap to reconnect." else "ClipCascade monitoring is inactive. Tap to restart."
+
             // 2. Create the actual Alert Notification
             val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_failure)
-                .setContentTitle("ClipCascade Service Inactive")
-                .setContentText("ClipCascade monitoring is inactive. Tap to restart.")
+                .setContentTitle(title)
+                .setContentText(text)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setGroup(GROUP_KEY)

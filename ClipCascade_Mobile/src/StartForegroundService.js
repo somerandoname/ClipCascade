@@ -607,6 +607,7 @@ module.exports = async (inputData = null) => {
               },
               onConnect: async () => {
                 await updateWsStatus('✅ Connected');
+                await setDataInAsyncStorage('wsConnected', 'true');
 
                 toggle = false;
                 // Subscribe to a topic
@@ -697,7 +698,7 @@ module.exports = async (inputData = null) => {
                 }
               },
               onDisconnect: async () => {
-
+                await setDataInAsyncStorage('wsConnected', 'false');
                 await updateWsStatus('Disconnected');
               },
               onStompError: async frame => {
@@ -713,6 +714,7 @@ module.exports = async (inputData = null) => {
                 );
               },
               onWebSocketClose: async event => {
+                await setDataInAsyncStorage('wsConnected', 'false');
 
                 const reason = event?.reason || (event?.code ? `code ${event.code}` : 'closed by client');
                 await updateWsStatus(
@@ -882,6 +884,7 @@ module.exports = async (inputData = null) => {
 
                 wsSignalingClient.onopen = async () => {
                   await updateWsStatus('✅ Connected');
+                  await setDataInAsyncStorage('wsConnected', 'true');
 
                   if (enable_websocket_status_notification === 'true') {
                     if (websocket_status_notification_toggle == true) {
@@ -941,6 +944,7 @@ module.exports = async (inputData = null) => {
                 };
 
                 wsSignalingClient.onclose = async event => {
+                  await setDataInAsyncStorage('wsConnected', 'false');
                   await updateWsStatus(
                     '⚠️ WebSocket Close: ' + event.reason,
                   );
@@ -1516,10 +1520,19 @@ module.exports = async (inputData = null) => {
             },
           );
 
+          const isWebSocketConnected = () => {
+            if (server_mode === 'P2P') {
+              return !!(wsSignalingClient && wsSignalingClient.readyState === WebSocket.OPEN);
+            }
+            return !!(stompClient && stompClient.connected);
+          };
+
           pingListener = DeviceEventEmitter.addListener(
             'CLIPCASCADE_PING',
             async () => {
-              await setDataInAsyncStorage('echo', 'pong');
+              const connected = isWebSocketConnected();
+              await setDataInAsyncStorage('wsConnected', connected ? 'true' : 'false');
+              await setDataInAsyncStorage('echo', connected ? 'connected' : 'disconnected');
             },
           );
 

@@ -249,7 +249,7 @@ export default function App() {
           while (iterate > 0) {
             await new Promise(resolve => setTimeout(resolve, 100)); //100 ms
             const echo = await getDataFromAsyncStorage('echo');
-            if (echo && echo === 'pong') {
+            if (echo && (echo === 'pong' || echo === 'connected' || echo === 'disconnected')) {
               foregroundServiceIsActive = true;
               break;
             }
