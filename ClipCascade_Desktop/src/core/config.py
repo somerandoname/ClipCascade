@@ -36,6 +36,7 @@ class Config:
         """
         try:
             temp = self.data.copy()
+            temp["password"] = ""  # Never save raw password in plaintext config
             if self.data.get("cipher_enabled") and self.data.get("hashed_password"):
                 temp["hashed_password"] = base64.b64encode(
                     temp["hashed_password"]
@@ -59,6 +60,7 @@ class Config:
                     self.data["hashed_password"] = base64.b64decode(
                         self.data["hashed_password"]
                     )
+                self.data["password"] = ""  # Ensure no plaintext password in memory from legacy config
                 return True
             except Exception as e:
                 logging.error(f"Failed to load data: {e}")

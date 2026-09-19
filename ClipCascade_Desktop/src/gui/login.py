@@ -72,7 +72,14 @@ class LoginForm(tk.Tk):
         self.password_entry = ttk.Entry(
             self.password_frame, show="*", width=47, font=("Helvetica", 13)
         )
-        self.password_entry.insert(0, self.config.data["password"])
+        initial_password = self.config.data.get("password", "")
+        if not initial_password and self.config.data.get("save_password") and self.config.data.get("username"):
+            try:
+                from utils.credential_manager import CredentialManager
+                initial_password = CredentialManager.get_password(self.config.data["username"]) or ""
+            except Exception:
+                initial_password = ""
+        self.password_entry.insert(0, initial_password)
         self.password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.eye_icon = ttk.Label(self.password_frame, text="🙈", cursor="hand2")
@@ -110,6 +117,15 @@ class LoginForm(tk.Tk):
             checks_frame, text="Enable Notification", variable=self.notification_var
         )
         self.notification_checkbox.pack(pady=3, anchor=tk.W)
+
+        # Remember Password Checkbox
+        self.save_password_var = tk.BooleanVar(value=self.config.data["save_password"])
+        self.save_password_checkbox = ttk.Checkbutton(
+            checks_frame,
+            text="Remember Password Securely on this Device",
+            variable=self.save_password_var,
+        )
+        self.save_password_checkbox.pack(pady=3, anchor=tk.W)
 
         # Button frame
         button_frame = ttk.Frame(main_frame)
@@ -196,25 +212,12 @@ class LoginForm(tk.Tk):
         self.salt_entry.insert(0, self.config.data["salt"])
         self.salt_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W + tk.E)
 
-        # Save Password Locally Checkbox
-        save_password_label = ttk.Label(
-            self.extra_frame,
-            text="Store Password Locally\n(not recommended; \nonly works if encryption is disabled):",
-        )
-        save_password_label.grid(row=2, column=0, padx=(0, 10), pady=5, sticky=tk.W)
-        self.save_password_var = tk.BooleanVar(value=self.config.data["save_password"])
-        self.save_password_checkbox = ttk.Checkbutton(
-            self.extra_frame,
-            variable=self.save_password_var,
-        )
-        self.save_password_checkbox.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
-
         # Maximum Clipboard Size - Local Limit
         local_clipboard_size_label = ttk.Label(
             self.extra_frame, text="Maximum Clipboard Size\nLocal Limit (in bytes):"
         )
         local_clipboard_size_label.grid(
-            row=3, column=0, padx=(0, 10), pady=5, sticky=tk.W
+            row=2, column=0, padx=(0, 10), pady=5, sticky=tk.W
         )
         self.local_clipboard_size_entry = ttk.Entry(
             self.extra_frame, width=50, font=("Helvetica", 13)
@@ -223,7 +226,7 @@ class LoginForm(tk.Tk):
             0, str(self.config.data["max_clipboard_size_local_limit_bytes"] or "")
         )
         self.local_clipboard_size_entry.grid(
-            row=3, column=1, padx=10, pady=5, sticky=tk.W + tk.E
+            row=2, column=1, padx=10, pady=5, sticky=tk.W + tk.E
         )
 
         # Enable Image Sharing Checkbox
@@ -231,7 +234,7 @@ class LoginForm(tk.Tk):
             self.extra_frame, text="Enable Image Sharing:"
         )
         enable_image_sharing_label.grid(
-            row=4, column=0, padx=(0, 10), pady=5, sticky=tk.W
+            row=3, column=0, padx=(0, 10), pady=5, sticky=tk.W
         )
         self.enable_image_sharing_var = tk.BooleanVar(
             value=self.config.data["enable_image_sharing"]
@@ -241,7 +244,7 @@ class LoginForm(tk.Tk):
             variable=self.enable_image_sharing_var,
         )
         self.enable_image_sharing_checkbox.grid(
-            row=4, column=1, padx=10, pady=5, sticky=tk.W
+            row=3, column=1, padx=10, pady=5, sticky=tk.W
         )
 
         # Enable File Sharing Checkbox
@@ -249,7 +252,7 @@ class LoginForm(tk.Tk):
             self.extra_frame, text="Enable File Sharing:"
         )
         enable_file_sharing_label.grid(
-            row=5, column=0, padx=(0, 10), pady=5, sticky=tk.W
+            row=4, column=0, padx=(0, 10), pady=5, sticky=tk.W
         )
         self.enable_file_sharing_var = tk.BooleanVar(
             value=self.config.data["enable_file_sharing"]
@@ -259,7 +262,7 @@ class LoginForm(tk.Tk):
             variable=self.enable_file_sharing_var,
         )
         self.enable_file_sharing_checkbox.grid(
-            row=5, column=1, padx=10, pady=5, sticky=tk.W
+            row=4, column=1, padx=10, pady=5, sticky=tk.W
         )
 
         # Default File Download Location
@@ -267,7 +270,7 @@ class LoginForm(tk.Tk):
             self.extra_frame, text="Default File Download Location:"
         )
         default_file_download_location_label.grid(
-            row=6, column=0, padx=(0, 10), pady=5, sticky=tk.W
+            row=5, column=0, padx=(0, 10), pady=5, sticky=tk.W
         )
         self.default_file_download_location_entry = ttk.Entry(
             self.extra_frame, width=50, font=("Helvetica", 13)
@@ -276,7 +279,7 @@ class LoginForm(tk.Tk):
             0, self.config.data["default_file_download_location"]
         )
         self.default_file_download_location_entry.grid(
-            row=6, column=1, padx=10, pady=5, sticky=tk.W + tk.E
+            row=5, column=1, padx=10, pady=5, sticky=tk.W + tk.E
         )
 
         # Configure grid weights for extra_frame

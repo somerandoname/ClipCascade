@@ -7,6 +7,7 @@ from core.constants import *
 from core.config import Config
 from utils.request_manager import RequestManager
 from utils.cipher_manager import CipherManager
+from utils.credential_manager import CredentialManager
 from stomp_ws.stomp_manager import STOMPManager
 from p2p.p2p_manager import P2PManager
 
@@ -123,10 +124,19 @@ class Application:
     def authenticate_and_connect(self):
         # Attempt to connect with existing cookie
         if self.config.data.get("cookie"):
-            ws_conn_successful, msg = self._get_ws_manager().connect()
-            if ws_conn_successful:
-                self._get_ws_manager().is_login_phase = False
-                return
+            # Ensure hashed_password is present if cipher is enabled
+            if self.config.data.get("cipher_enabled") and not self.config.data.get("hashed_password"):
+                if self.config.data.get("save_password") and self.config.data.get("username"):
+                    saved_pw = CredentialManager.get_password(self.config.data["username"])
+                    if saved_pw:
+                        self.config.data["hashed_password"] = (
+                            self.cipher_manager.hash_password(saved_pw)
+                        )
+            if not self.config.data.get("cipher_enabled") or self.config.data.get("hashed_password"):
+                ws_conn_successful, msg = self._get_ws_manager().connect()
+                if ws_conn_successful:
+                    self._get_ws_manager().is_login_phase = False
+                    return
 
         # enable login form
         used_saved_credentials = False
@@ -134,15 +144,24 @@ class Application:
         if PLATFORM.startswith(LINUX) and not XMODE:
             Echo("═" * 14 + "\n║ LOGIN FORM ║\n" + "═" * 14)
         while True:
+            raw_password = None
             if (
-                self.config.data.get("cookie") is not None
-                and self.config.data["save_password"]
-                and self.config.data["cipher_enabled"] == False
+                self.config.data.get("save_password")
+                and self.config.data.get("username")
                 and not used_saved_credentials
             ):
-                # Attempt to connect with password when using saved credentials
+                saved_password = CredentialManager.get_password(
+                    self.config.data["username"]
+                )
+                if saved_password:
+                    used_saved_credentials = True
+                    raw_password = saved_password
+                    self.config.data["password"] = (
+                        CipherManager.string_to_sha3_512_lowercase_hex(raw_password)
+                    )
+
+            if raw_password is None:
                 used_saved_credentials = True
-            else:
                 display_login_success_dialog = True
                 self.config.data["password"] = ""  # Clear the password
                 login_form = LoginForm(
@@ -186,8 +205,15 @@ class Application:
                         self.config.data["hashed_password"] = (
                             self.cipher_manager.hash_password(raw_password)
                         )
-                    if not self.config.data["save_password"]:
-                        self.config.data["password"] = ""
+                    if self.config.data.get("save_password") and raw_password:
+                        CredentialManager.save_password(
+                            self.config.data["username"], raw_password
+                        )
+                    else:
+                        CredentialManager.delete_password(
+                            self.config.data.get("username", "")
+                        )
+                    self.config.data["password"] = ""
                     if display_login_success_dialog:
                         CustomDialog(
                             "Success! ClipCascade will now run in the task bar/menu bar.",
@@ -254,6 +280,9 @@ class Application:
         try:
             self._get_ws_manager().disconnect()
             self.request_manager.logout()
+            if self.config.data.get("username"):
+                CredentialManager.delete_password(self.config.data["username"])
+            self.config.data["save_password"] = False
             self.config.data["hashed_password"] = None
             self.config.data["cookie"] = None
             self.config.data["maxsize"] = None

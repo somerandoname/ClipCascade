@@ -1,3 +1,6 @@
 **/__pycache__/
 *.log
 DATA
+build/
+dist/
+*.spec

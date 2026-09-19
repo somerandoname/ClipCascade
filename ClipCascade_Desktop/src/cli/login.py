@@ -51,7 +51,19 @@ class LoginForm:
             or self.config.data["username"]
         )
 
-        self.config.data["password"] = getpass.getpass("password: ")
+        saved_pw = ""
+        if self.config.data.get("save_password") and self.config.data.get("username"):
+            try:
+                from utils.credential_manager import CredentialManager
+                saved_pw = (
+                    CredentialManager.get_password(self.config.data["username"]) or ""
+                )
+            except Exception:
+                saved_pw = ""
+
+        prompt = "password [saved in credential vault]: " if saved_pw else "password: "
+        entered_password = getpass.getpass(prompt)
+        self.config.data["password"] = entered_password if entered_password else saved_pw
 
         server_url = (
             input(f"server url [{self.config.data['server_url']}]: ")
@@ -108,7 +120,7 @@ class LoginForm:
 
         self.config.data["save_password"] = LoginForm.str_to_bool(
             input(
-                f"store password locally(not recommended; only works if encryption is disabled) [{LoginForm.bool_to_str(self.config.data['save_password'])}]: "
+                f"remember password securely in credential vault [{LoginForm.bool_to_str(self.config.data['save_password'])}]: "
             )
             or LoginForm.bool_to_str(self.config.data["save_password"])
         )
